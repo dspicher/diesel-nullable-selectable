@@ -1,5 +1,5 @@
-use diesel::{Connection, TextExpressionMethods};
-
+use diesel::prelude::*;
+use diesel::{Connection, NullableExpressionMethods, TextExpressionMethods};
 diesel::table! {
     users {
         id -> Integer,
@@ -12,13 +12,12 @@ fn connection_no_data() -> diesel::sqlite::SqliteConnection {
     diesel::sqlite::SqliteConnection::establish(":memory:").unwrap()
 }
 
-// #[derive(Debug, diesel::Queryable, diesel::Selectable)]
-// struct User {
-//     id: i32,
-//     name: String,
-//     #[diesel(embed)]
-//     hair_color: Option<HairColor>,
-// }
+#[derive(Debug, diesel::Queryable, diesel::Selectable)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+struct User {
+    #[diesel(embed)]
+    hair_color: HairColor,
+}
 
 #[derive(Debug)]
 struct HairColor(Option<String>);
@@ -28,12 +27,27 @@ where
     DB: diesel::backend::Backend,
 {
     type SelectExpression = diesel::helper_types::Concat<
-        users::columns::hair_color,
+        diesel::dsl::AssumeNotNull<users::columns::hair_color>,
         diesel::internal::derives::as_expression::Bound<diesel::sql_types::Text, &'static str>,
     >;
 
     fn construct_selection() -> Self::SelectExpression {
-        unimplemented!() //)users::hair_color.concat("withdraw/wallet/")
+        users::hair_color.assume_not_null().concat("hi")
+    }
+}
+
+impl<DB> Queryable<diesel::sql_types::Nullable<diesel::sql_types::Text>, DB> for HairColor
+where
+    DB: diesel::backend::Backend,
+    String: diesel::deserialize::FromSql<diesel::sql_types::Text, DB>,
+{
+    type Row = Option<String>;
+
+    fn build(url_str: Self::Row) -> diesel::deserialize::Result<Self> {
+        match url_str {
+            None => Ok(HairColor(None)),
+            Some(url_str) => Ok(HairColor(Some(url_str.into()))),
+        }
     }
 }
 
@@ -68,15 +82,9 @@ fn main() {
         .execute(connection)
         .unwrap();
 
-    // let users = users::table
-    //     .select(User::as_select())
-    //     .load(connection)
-    //     .unwrap();
-    // dbg!(users);
-
-    let names = users::dsl::users
-        .select(users::dsl::hair_color.concat("ish"))
-        .load(connection);
-    let expected_names = vec![Some("Greenish".to_string()), None];
-    assert_eq!(Ok(expected_names), names);
+    let users = users::table
+        .select(User::as_select())
+        .load(connection)
+        .unwrap();
+    dbg!(users);
 }
