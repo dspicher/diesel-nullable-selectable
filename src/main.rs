@@ -1,4 +1,4 @@
-use diesel::Connection;
+use diesel::{Connection, TextExpressionMethods};
 
 diesel::table! {
     users {
@@ -12,11 +12,29 @@ fn connection_no_data() -> diesel::sqlite::SqliteConnection {
     diesel::sqlite::SqliteConnection::establish(":memory:").unwrap()
 }
 
-#[derive(Debug, diesel::Queryable, diesel::Selectable)]
-struct User {
-    id: i32,
-    name: String,
-    hair_color: Option<String>,
+// #[derive(Debug, diesel::Queryable, diesel::Selectable)]
+// struct User {
+//     id: i32,
+//     name: String,
+//     #[diesel(embed)]
+//     hair_color: Option<HairColor>,
+// }
+
+#[derive(Debug)]
+struct HairColor(Option<String>);
+
+impl<DB> diesel::expression::Selectable<DB> for HairColor
+where
+    DB: diesel::backend::Backend,
+{
+    type SelectExpression = diesel::helper_types::Concat<
+        users::columns::hair_color,
+        diesel::internal::derives::as_expression::Bound<diesel::sql_types::Text, &'static str>,
+    >;
+
+    fn construct_selection() -> Self::SelectExpression {
+        unimplemented!() //)users::hair_color.concat("withdraw/wallet/")
+    }
 }
 
 fn main() {
@@ -50,11 +68,11 @@ fn main() {
         .execute(connection)
         .unwrap();
 
-    let users = users::table
-        .select(User::as_select())
-        .load(connection)
-        .unwrap();
-    dbg!(users);
+    // let users = users::table
+    //     .select(User::as_select())
+    //     .load(connection)
+    //     .unwrap();
+    // dbg!(users);
 
     let names = users::dsl::users
         .select(users::dsl::hair_color.concat("ish"))
